@@ -17,7 +17,9 @@ concurrency:
 jobs:
   build:
     name: Build universal app
-    runs-on: macos-15
+    # Xcode 26 / macOS 26 SDK: apps built against an older SDK are drawn in the
+    # pre-26 style on macOS 26. The binary still runs on macOS 14+.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
@@ -49,6 +51,13 @@ jobs:
           codesign --verify --deep --strict "$APP"
           lipo -archs "$APP/Contents/MacOS/MacMeshProfiler"
           lipo "$APP/Contents/MacOS/MacMeshProfiler" -verify_arch arm64 x86_64
+          # Guard against silently falling back to an older SDK.
+          for arch in arm64 x86_64; do
+            info=$(otool -arch "$arch" -l "$APP/Contents/MacOS/MacMeshProfiler" | grep -A4 LC_BUILD_VERSION)
+            echo "$arch: $(echo "$info" | awk '/minos|sdk/ {printf "%s %s  ", $1, $2}')"
+            sdk=$(echo "$info" | awk '/sdk/ {print $2}' | cut -d. -f1)
+            if [ "$sdk" -lt 26 ]; then echo "::error::$arch built against SDK $sdk, expected 26+"; exit 1; fi
+          done
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
