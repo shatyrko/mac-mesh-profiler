@@ -121,3 +121,7 @@ scripts/build-app.sh         build, bundle, ad-hoc sign, zip
 scripts/make-icon.swift      renders the app icon
 .github/workflows/build.yml  CI build + release on v* tags
 ```
+
+## License
+
+[MIT](LICENSE) © 2026 Oleksiy Shatyrko
