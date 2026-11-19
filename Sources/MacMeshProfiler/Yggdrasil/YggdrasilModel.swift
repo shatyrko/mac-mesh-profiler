@@ -38,6 +38,11 @@ final class YggdrasilModel: MeshServiceModel {
 
     var isDirty: Bool { saved != nil && draft != saved }
 
+    var configuredPeers: [String] { saved?.peers ?? [] }
+
+    /// Log files shown in the Log tab (demo mode swaps in a sample file).
+    var logPaths = YggdrasilModel.logPaths
+
     /// The node's public key (not secret). Shown only when it is known to
     /// belong to the running node, i.e. its address matches the live one.
     private(set) var publicKey: String?
@@ -368,5 +373,17 @@ final class YggdrasilModel: MeshServiceModel {
             }
             try await Admin.run(script, reason: "install Yggdrasil \(release.version)")
         }
+    }
+
+    // MARK: Demo
+
+    /// Fills the model with sample data for screenshots (see Demo.swift).
+    func applyDemo(settings: YggdrasilSettings, runtime: ServiceRuntime, publicKey: String, logPath: String) {
+        saved = settings
+        draft = settings
+        savedAt = Date().addingTimeInterval(-120)
+        self.runtime = runtime
+        self.publicKey = publicKey
+        logPaths = [logPath]
     }
 }

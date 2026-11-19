@@ -69,7 +69,7 @@ struct YggdrasilView: View {
                 if !model.runtime.isInstalled {
                     notInstalled
                 } else {
-                    LogView(paths: YggdrasilModel.logPaths)
+                    LogView(paths: model.logPaths)
                 }
             }
         }

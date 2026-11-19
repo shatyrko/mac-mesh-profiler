@@ -9,7 +9,8 @@ struct ContentView: View {
             List(selection: $app.selection) {
                 Section("Networks") {
                     ForEach(ServiceID.allCases) { id in
-                        SidebarRow(id: id, runtime: app.model(for: id).runtime)
+                        SidebarRow(id: id, runtime: app.model(for: id).runtime,
+                                   configuredPeers: app.model(for: id).configuredPeers)
                             .tag(id)
                     }
                 }
@@ -59,6 +60,7 @@ struct ContentView: View {
 private struct SidebarRow: View {
     let id: ServiceID
     let runtime: ServiceRuntime
+    let configuredPeers: [String]
 
     var body: some View {
         HStack(spacing: 10) {
@@ -82,8 +84,10 @@ private struct SidebarRow: View {
     private var subtitle: String {
         guard runtime.isInstalled else { return "Not installed" }
         if runtime.daemon.running {
-            let up = runtime.livePeers.filter { $0.state == .up }.count
-            return runtime.livePeers.isEmpty ? "Running" : "Running · \(up) peer\(up == 1 ? "" : "s") up"
+            // Same count as the Peers tab: configured peers that are connected.
+            guard !configuredPeers.isEmpty, runtime.liveNote == nil else { return "Running" }
+            let up = configuredPeers.filter { PeerMatch.live(for: $0, in: runtime.livePeers)?.state == .up }.count
+            return "Running · \(up)/\(configuredPeers.count) up"
         }
         return runtime.stateText
     }

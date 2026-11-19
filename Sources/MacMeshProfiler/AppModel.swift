@@ -24,7 +24,15 @@ final class AppModel {
 
     var anyRunning: Bool { services.contains { $0.runtime.daemon.running } }
 
+    /// `-demo YES` on the command line: sample data, no polling, no system access.
+    /// Used to take README screenshots without exposing a real node.
+    let isDemo = UserDefaults.standard.bool(forKey: "demo")
+
     init() {
+        if isDemo {
+            Demo.apply(to: self)
+            return
+        }
         pollTask = Task { [weak self] in
             await self?.refreshAll()
             Task { [weak self] in await self?.checkForUpdates() }

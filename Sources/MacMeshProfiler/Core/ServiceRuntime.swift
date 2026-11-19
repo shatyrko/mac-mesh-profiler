@@ -65,6 +65,8 @@ struct ServiceRuntime {
 protocol MeshServiceModel: AnyObject {
     var id: ServiceID { get }
     var runtime: ServiceRuntime { get set }
+    /// Peers in the configuration (what "x/y peers up" counts against).
+    var configuredPeers: [String] { get }
     func start() async
     func stop() async
     func restart() async

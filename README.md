@@ -9,7 +9,7 @@ Both networks need the same chores on a Mac: install the daemon, run it as a
 root service, and list the nodes (peers) it should connect to in a config file.
 Mac Mesh Profiler does all of that from one window and a menu-bar item.
 
-![Mycelium peers tab](docs/screenshot-mycelium-peers.png)
+![Yggdrasil peers with live status](docs/screenshots/yggdrasil-peers.png)
 
 ## Features
 
@@ -29,6 +29,23 @@ Mac Mesh Profiler does all of that from one window and a menu-bar item.
 - **Menu bar** item with status, start/stop and copy-address for both networks.
 
 Each network has its own page with **Status · Peers · Node · Network · Log** tabs.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Yggdrasil status](docs/screenshots/yggdrasil-status.png) | ![Mycelium status](docs/screenshots/mycelium-status.png) |
+| **Status** — version and updates, service state, overlay address, public key, start at boot | Same for Mycelium, installed by the app from ThreeFold's release |
+| ![Mycelium peers](docs/screenshots/mycelium-peers.png) | ![Yggdrasil node settings](docs/screenshots/yggdrasil-node.png) |
+| **Peers** — green connected, orange connecting, red failed; traffic per peer; LAN and inbound connections | **Node** — listen addresses, TUN interface, optional local admin API |
+| ![Yggdrasil network](docs/screenshots/yggdrasil-network.png) | ![Mycelium network](docs/screenshots/mycelium-network.png) |
+| **Network** — every listening port and what it is for | Interfaces in use: TUN, peering traffic, local APIs |
+
+![Mycelium log](docs/screenshots/mycelium-log.png)
+
+**Log** — the daemon's log, newest lines at the bottom.
+
+<sub>Screenshots use the app's demo mode (sample data, documentation-range IPs).</sub>
 
 ## Install
 
@@ -55,6 +72,13 @@ UNIVERSAL=1 scripts/build-app.sh --zip   # arm64 + x86_64 zip (needs full Xcode)
 ```
 
 GitHub Actions builds every push to `main`; pushing a `v*` tag publishes a release.
+
+To see the app with sample data — no daemons, no system access, nothing
+changed — launch it in demo mode (this is how the screenshots are made):
+
+```bash
+open "build/Mac Mesh Profiler.app" --args -demo YES
+```
 
 ## What it changes on your system
 

@@ -7,7 +7,7 @@ struct ListeningSocket: Identifiable, Hashable {
     var proto: String
     /// "IPv4", "IPv6" or "IPv4+6"
     var family: String
-    /// Display address: "all", "127.0.0.1", "fe80::603e:5fff:…" …
+    /// Display address: "all", "127.0.0.1", "fe80::1c2d:5e8a:…" …
     var address: String
     var port: Int
     /// Interface(s) it is bound to, when that can be told.

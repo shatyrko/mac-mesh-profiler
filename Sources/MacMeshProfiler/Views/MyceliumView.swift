@@ -79,7 +79,7 @@ struct MyceliumView: View {
                 if !model.runtime.isInstalled {
                     notInstalled
                 } else {
-                    LogView(paths: [MyceliumModel.logPath])
+                    LogView(paths: [model.logPath])
                 }
             }
         }

@@ -27,6 +27,9 @@ final class MyceliumModel: MeshServiceModel {
     private(set) var interfaceNames: Set<String> = []
 
     var configExists: Bool { saved != nil }
+    var configuredPeers: [String] { (saved ?? draft).peers }
+    /// Log file shown in the Log tab (demo mode swaps in a sample file).
+    var logPath = MyceliumModel.logPath
     var isDirty: Bool { draft != (saved ?? baseline) }
     /// Defaults shown when no config file exists yet.
     private var baseline = MyceliumSettings()
@@ -303,5 +306,17 @@ final class MyceliumModel: MeshServiceModel {
             }
             try await Admin.run(script, reason: "install Mycelium \(release.version)")
         }
+    }
+
+    // MARK: Demo
+
+    /// Fills the model with sample data for screenshots (see Demo.swift).
+    func applyDemo(settings: MyceliumSettings, runtime: ServiceRuntime, publicKey: String, logPath: String) {
+        saved = settings
+        draft = settings
+        self.runtime = runtime
+        nodePublicKey = publicKey
+        interfaceNames = []
+        self.logPath = logPath
     }
 }
