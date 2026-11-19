@@ -9,15 +9,18 @@ struct ShellResult {
 
 /// Runs unprivileged commands off the main thread.
 enum Shell {
-    static func run(_ executable: String, _ arguments: [String] = [], stdin: Data? = nil) async -> ShellResult {
+    static func run(_ executable: String, _ arguments: [String] = [], stdin: Data? = nil,
+                    environment: [String: String] = [:]) async -> ShellResult {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(returning: runSync(executable, arguments, stdin: stdin))
+                continuation.resume(returning: runSync(executable, arguments, stdin: stdin, environment: environment))
             }
         }
     }
 
-    static func runSync(_ executable: String, _ arguments: [String], stdin: Data? = nil) -> ShellResult {
+    /// `environment` is added to the minimal PATH/LANG environment (e.g. HOME for Homebrew).
+    static func runSync(_ executable: String, _ arguments: [String], stdin: Data? = nil,
+                        environment: [String: String] = [:]) -> ShellResult {
         guard FileManager.default.isExecutableFile(atPath: executable) else {
             return ShellResult(status: 127, stdout: "", stderr: "\(executable): not found")
         }
@@ -25,6 +28,7 @@ enum Shell {
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         process.environment = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin", "LANG": "en_US.UTF-8"]
+            .merging(environment) { _, new in new }
 
         let outPipe = Pipe()
         let errPipe = Pipe()

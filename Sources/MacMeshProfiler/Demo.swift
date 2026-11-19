@@ -11,6 +11,115 @@ enum Demo {
     static func apply(to app: AppModel) {
         applyYggdrasil(app.yggdrasil)
         applyMycelium(app.mycelium)
+        applyVPN(app.vpn)
+        applyWireGuard(app.wireguard)
+    }
+
+    // MARK: WireGuard
+
+    private static func applyWireGuard(_ model: WireGuardModel) {
+        var nl = WGConfigSummary()
+        nl.addresses = ["10.2.0.2/32"]
+        nl.dns = ["10.2.0.1"]
+        nl.publicKey = "q3V1bW9ja1B1YmxpY0tleUZvckRlbW9Pbmx5MDEyMzQ="
+        nl.peers = [WGPeerSummary(publicKey: "ZGVtb1BlZXJQdWJsaWNLZXlOb3RSZWFsQWJjZGVmZ2g=",
+                                  endpoint: "198.51.100.140:51820", allowedIPs: ["0.0.0.0/0", "::/0"], keepalive: 25)]
+        var home = WGConfigSummary()
+        home.addresses = ["10.66.0.5/24"]
+        home.peers = [WGPeerSummary(publicKey: "aG9tZUdhdGV3YXlQdWJsaWNLZXlEZW1vT25seTAxMjM=",
+                                    endpoint: "home.example.net:51820", allowedIPs: ["10.66.0.0/24", "192.168.1.0/24"],
+                                    keepalive: nil)]
+        let tunnels = [
+            WGTunnel(name: "wg-NL-12", summary: nl, running: true, interface: "utun12",
+                     rxBytes: 182_452_224, txBytes: 21_495_808),
+            WGTunnel(name: "home", summary: home),
+        ]
+        var vpn = VPNService(id: "wg:wg-NL-12", name: "wg-NL-12", type: "WireGuard", appBundleID: nil, enabled: true,
+                             state: .connected, server: "198.51.100.140:51820", providerBundleID: nil, onDemand: nil)
+        vpn.interface = "utun12"
+        vpn.addresses = ["10.2.0.2"]
+        vpn.dnsServers = ["10.2.0.1"]
+        vpn.routes = [
+            RouteEntry(family: "IPv4", destination: "0/1", gateway: "utun12", flags: "USc"),
+            RouteEntry(family: "IPv4", destination: "128.0/1", gateway: "utun12", flags: "USc"),
+            RouteEntry(family: "IPv4", destination: "10.2.0.2", gateway: "10.2.0.2", flags: "UH"),
+            RouteEntry(family: "IPv6", destination: "::/1", gateway: "utun12", flags: "USc"),
+            RouteEntry(family: "IPv6", destination: "8000::/1", gateway: "utun12", flags: "USc"),
+        ]
+        vpn.resolvers = [DNSResolver(index: 1, domain: nil, nameservers: ["10.2.0.1"], searchDomains: [], interface: nil)]
+        let checks: [MeshCheckItem] = MeshClashCheck.flagItems(vpn, connected: true) + [
+            MeshCheckItem(severity: .ok, title: "Yggdrasil overlay route is intact", detail: "200::/7 → utun4 (routing table)."),
+            MeshCheckItem(severity: .info, title: "4 of 4 Yggdrasil peers are reached through wg-NL-12",
+                          detail: "203.0.113.10, 198.51.100.24, 2001:db8:4:1::7, 192.0.2.55. This works, but adds latency, and these peers see the VPN's exit address instead of yours."),
+            MeshCheckItem(severity: .ok, title: "Mycelium overlay route is intact", detail: "400::/7 → utun20 (routing table)."),
+            MeshCheckItem(severity: .info, title: "10 of 10 Mycelium peers are reached through wg-NL-12",
+                          detail: "ThreeFold public nodes. This works, but adds latency, and these peers see the VPN's exit address instead of yours."),
+        ]
+        model.applyDemo(
+            tunnels: tunnels,
+            stats: ["wg-NL-12": [WGPeerStats(publicKey: nl.peers[0].publicKey, endpoint: "198.51.100.140:51820",
+                                             latestHandshake: Date().addingTimeInterval(-47),
+                                             rxBytes: 182_452_224, txBytes: 21_495_808)]],
+            vpn: ["wg-NL-12": vpn], checks: ["wg-NL-12": checks], version: "1.0.20250521")
+    }
+
+    // MARK: VPN
+
+    private static func applyVPN(_ model: VPNModel) {
+        let flags = VPNFlags(includeAllNetworks: false, excludeLocalNetworks: true, enforceRoutes: false,
+                             excludeAPNs: true, excludeCellularServices: true, excludeDeviceCommunication: true)
+        var proton = VPNService(
+            id: "6F1C2A9E-3B47-4D8A-9E21-5C7B0D4F8A13", name: "ProtonVPN", type: "VPN",
+            appBundleID: "ch.protonvpn.mac", enabled: true, state: .connected,
+            server: "203.0.113.80", providerBundleID: "ch.protonvpn.mac.WireGuard-Extension", onDemand: false,
+            vendorSettings: [KeyValue(key: "wg-protocol", value: "udp")], flags: flags)
+        proton.companions = [CompanionConfig(
+            id: "0B3E7D21-8C5A-4F19-A6D4-2E9F1B7C5A30", name: "Proton VPN Split tunneling",
+            kind: "Proxy (per-app / per-IP rules)", providerBundleID: "ch.protonvpn.mac.Transparent-Proxy",
+            settings: [KeyValue(key: "appIDs", value: "—"), KeyValue(key: "dnsServers", value: "10.2.0.1"),
+                       KeyValue(key: "ips", value: "192.0.2.55")],
+            excludedIPs: ["192.0.2.55"], splitMode: "exclusion")]
+        proton.interface = "utun11"
+        proton.addresses = ["10.2.0.2", "2a07:b944::2:2"]
+        proton.dnsServers = ["10.2.0.1"]
+        proton.isPrimary = true
+        proton.routes = [
+            RouteEntry(family: "IPv4", destination: "0/1", gateway: "10.2.0.1", flags: "UGScg"),
+            RouteEntry(family: "IPv4", destination: "128.0/1", gateway: "10.2.0.1", flags: "UGSc"),
+            RouteEntry(family: "IPv4", destination: "10.2.0.2", gateway: "10.2.0.2", flags: "UH"),
+            RouteEntry(family: "IPv4", destination: "default", gateway: "link#24", flags: "UCSIg"),
+            RouteEntry(family: "IPv6", destination: "::/1", gateway: "utun11", flags: "USc"),
+            RouteEntry(family: "IPv6", destination: "8000::/1", gateway: "utun11", flags: "USc"),
+            RouteEntry(family: "IPv6", destination: "default", gateway: "fe80::%utun11", flags: "UGcIg"),
+        ]
+        proton.resolvers = [DNSResolver(index: 1, domain: nil, nameservers: ["10.2.0.1"], searchDomains: [],
+                                        interface: "utun11")]
+        proton.rawStatus = "Connected\nExtended Status <dictionary> {\n  Status : 2\n  …\n}"
+
+        let office = VPNService(
+            id: "C4D81F06-72AE-4B3C-8F95-1A6E2D0B9C47", name: "Office VPN", type: "VPN",
+            appBundleID: nil, enabled: true, state: .disconnected,
+            server: "vpn.example.com", providerBundleID: nil, onDemand: false, flags: flags)
+
+        model.services = [proton, office]
+        model.checks = [
+            proton.id: [
+                MeshCheckItem(severity: .ok, title: "Other tunnels are left alone",
+                              detail: "\"Include all networks\" is off, so traffic follows the routing table and the mesh TUN routes keep working."),
+                MeshCheckItem(severity: .ok, title: "Yggdrasil overlay route is intact",
+                              detail: "200::/7 → utun4 (routing table)."),
+                MeshCheckItem(severity: .info, title: "3 of 4 Yggdrasil peers are reached through ProtonVPN",
+                              detail: "203.0.113.10, 198.51.100.24, 2001:db8:4:1::7. This works, but adds latency, and these peers see the VPN's exit address instead of yours."),
+                MeshCheckItem(severity: .ok, title: "1 Yggdrasil peer excluded by split tunnelling",
+                              detail: "192.0.2.55"),
+                MeshCheckItem(severity: .ok, title: "Mycelium overlay route is intact",
+                              detail: "400::/7 → utun20 (routing table)."),
+                MeshCheckItem(severity: .info, title: "10 of 10 Mycelium peers are reached through ProtonVPN",
+                              detail: "ThreeFold public nodes. This works, but adds latency, and these peers see the VPN's exit address instead of yours."),
+            ],
+            office.id: MeshClashCheck.flagItems(office, connected: false),
+        ]
+        model.lastRefresh = Date()
     }
 
     // MARK: Yggdrasil

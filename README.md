@@ -26,7 +26,16 @@ Mac Mesh Profiler does all of that from one window and a menu-bar item.
 - **Network tab**: every listening port (with what it is for) and every
   interface the daemon uses — TUN, LAN discovery, peering traffic, local APIs.
 - **Log tab** with the daemon's log, following new lines.
-- **Menu bar** item with status, start/stop and copy-address for both networks.
+- **Menu bar** item with status, start/stop and copy-address for both networks,
+  plus connect/disconnect for system VPNs.
+- **VPN section** for every VPN in System Settings (Proton VPN, WireGuard,
+  company VPNs …): status, server, tunnel interface, routes and DNS while
+  connected, connect/disconnect — and a **mesh check** that tells whether the VPN
+  breaks Yggdrasil or Mycelium. See [VPNs](#vpns).
+- **WireGuard section** for terminal WireGuard (`wg-quick`): install
+  wireguard-tools via Homebrew, import `.conf` files (e.g. Proton VPN's WireGuard
+  configs), start/stop tunnels, live handshakes and traffic, plus the same mesh
+  check and routes view. See [WireGuard](#wireguard).
 
 Each network has its own page with **Status · Peers · Node · Network · Log** tabs.
 
@@ -44,6 +53,15 @@ Each network has its own page with **Status · Peers · Node · Network · Log**
 ![Mycelium log](docs/screenshots/mycelium-log.png)
 
 **Log** — the daemon's log, newest lines at the bottom.
+
+| | |
+|---|---|
+| ![VPN status](docs/screenshots/vpn-status.png) | ![VPN mesh check](docs/screenshots/vpn-mesh-check.png) |
+| **VPN status** — server, tunnel, macOS VPN flags such as *include all networks* | **Mesh check** — overlay routes, which peers go through the VPN, split-tunnel exclusions |
+
+![WireGuard tunnels](docs/screenshots/wireguard-tunnels.png)
+
+**WireGuard** — wg-quick tunnels with endpoint, allowed IPs, handshake and traffic.
 
 <sub>Screenshots use the app's demo mode (sample data, documentation-range IPs).</sub>
 
@@ -122,23 +140,89 @@ Install writes a default `mycelium.toml` with ThreeFold's ten public nodes and a
 free `utunN` interface (N ≥ 20, since low numbers are usually taken on macOS).
 Settings the app doesn't edit are preserved when applying.
 
+## VPNs
+
+A VPN isn't a mesh, but it shares the same routing table, so it can quietly
+break one. The VPN section is **read-only** apart from connect/disconnect and
+needs no password:
+
+| What | Where it comes from |
+|------|---------------------|
+| List, state, server, on-demand | `scutil --nc list / show / status` |
+| *Include all networks*, *exclude local networks*, *enforce routes* …, and companion configs such as Proton's split-tunnelling proxy | `/Library/Preferences/com.apple.networkextension.plist` (world-readable). Only these flags and vendor settings are read — never password or identity fields |
+| Routes and DNS while connected | `netstat -rn`, `scutil --dns` |
+| Connect / Disconnect | `scutil --nc start / stop`, the same switch as System Settings › VPN |
+
+Some VPN apps switch macOS's *connect on demand* on while connected — Proton VPN
+does. macOS then reconnects the VPN right after any stop, so for those the app
+points you to the VPN's own app for disconnecting instead of offering a
+Disconnect button that wouldn't stick.
+
+The **mesh check** looks at:
+
+- **Include all networks** — the usual way a kill switch is built. When on, all
+  traffic is forced into the VPN regardless of routes, which most likely cuts off
+  the Yggdrasil (`200::/7`) and Mycelium (`400::/7`) TUNs.
+- **Overlay routes** — whether `200::/7` / `400::/7` still go to the mesh TUN.
+- **Peering traffic** — which configured peers are reached through the VPN
+  (`route -n get`). Public peers still work, with added latency; peers on
+  private addresses most likely don't. Peers listed in Proton's split-tunnelling
+  exclusions are counted as bypassing it.
+- **Peer health** — a running mesh with no connected peers while the VPN is up.
+
+The routing table doesn't show per-app or per-flow rules, so the check can't see
+everything a VPN does. The VPN app's own settings (server choice, account, keys)
+stay in its sandbox and Keychain and are not read.
+
+## WireGuard
+
+The WireGuard row is for **terminal WireGuard** — `wg`, `wg-quick` and
+`wireguard-go` from Homebrew's `wireguard-tools`. (Tunnels of the WireGuard
+App Store app are system VPNs and show up in the VPN list instead.)
+
+| Action | How | Password |
+|--------|-----|----------|
+| Install / Update | `brew install` / `brew upgrade wireguard-tools` (adds `wireguard-go` and bash 5); the newest version comes from `brew info` | no |
+| Import `.conf` | staged in the app's private temp folder (root can't read Documents/Desktop/Downloads for the app), then copied to `/etc/wireguard/<name>.conf`, root-only `600`; the directory is kept `755` so tunnel names can be listed | yes |
+| Start / Stop | `wg-quick up` / `down <name>` | yes |
+| Up or down, interface, traffic | the tunnel's address on a `utun` interface (`ifconfig`), counters from `netstat -I` | no |
+| Handshakes, per-peer traffic | `wg show all dump`, with the key columns dropped before they reach the app | yes |
+| Load details | the configs in `/etc/wireguard` without their `PrivateKey`/`PresharedKey` lines; the public key is derived with `wg pubkey` | yes |
+
+The app keeps addresses, DNS, endpoints and allowed IPs of each tunnel in its
+preferences; private and preshared keys stay in the root-only files. A tunnel
+name is the file name (max 15 characters). `PostUp`/`PreDown` hooks are shown,
+since `wg-quick` runs them as root.
+
+Don't run the same config on two machines at once: WireGuard identifies a
+client by its key, so the server keeps switching between them and both tunnels
+break. Create a separate config (key) per device.
+
+Proton VPN's app and its WireGuard configs both use `10.2.0.2`. Interfaces that
+belong to a system VPN are skipped when deciding which tunnel is up, so running
+both at once doesn't confuse the two.
+
 ## Not handled
 
 - Uninstalling either daemon.
 - Yggdrasil `MulticastInterfaces`, `AllowedPublicKeys`, `InterfacePeers`,
   `NodeInfo` (kept as they are, not editable in the app).
 - Mycelium private networks (`myceliumd-private`), topics, SOCKS proxy.
+- Changing a VPN's settings or choosing its server — that stays in the VPN's app.
 
 ## Layout
 
 ```
 Sources/MacMeshProfiler/
   MacMeshProfilerApp.swift   window + menu-bar scenes
-  AppModel.swift             both services, 5-second status polling
+  AppModel.swift             both services + VPNs, 5-second status polling
   Core/                      shell, admin prompt, launchd, GitHub releases,
-                             netstat/ifconfig inspection, peer matching
+                             netstat/ifconfig inspection, peer matching,
+                             system VPN reader, VPN mesh check
   Yggdrasil/                 config read/merge, admin API, install
   Mycelium/                  TOML read/write, HTTP API, public node list, install
+  VPN/                       system VPN model (status, connect/disconnect)
+  WireGuard/                 wg-quick configs, root scripts, tunnel model
   Views/                     SwiftUI views (tabs, peers, network, log)
 Resources/Info.plist
 scripts/build-app.sh         build, bundle, ad-hoc sign, zip
